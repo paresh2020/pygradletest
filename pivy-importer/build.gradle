@@ -1,0 +1,108 @@
+plugins {
+    id 'groovy'
+    id 'idea'
+    id 'application'
+    id "com.github.jk1.dependency-license-report" version "0.3.4"
+    id "com.github.hierynomus.license" version "0.13.1"
+    id "com.github.johnrengelman.shadow" version "5.1.0"
+}
+
+apply from: "$rootDir/gradle/code-quality.gradle"
+apply from: "$rootDir/gradle/publishing.gradle"
+
+mainClassName = 'com.linkedin.python.importer.ImporterCLI'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    compile 'org.codehaus.groovy:groovy-all:2.4.5'
+    compile 'org.apache.httpcomponents:fluent-hc:4.5.1'
+    compile 'commons-cli:commons-cli:1.3.1'
+    compile 'ch.qos.logback:logback-classic:1.1.3'
+    compile 'org.apache.commons:commons-compress:1.10'
+    compile 'commons-io:commons-io:2.4'
+
+    testCompile group: "junit", name: "junit", version: "4.+"
+    testCompile ('org.spockframework:spock-core:1.1-groovy-2.4')
+}
+
+task setupTestingIvyRepo
+
+def getIvyRepo() {
+    return file("${rootProject.getBuildDir()}/ivy-repo")
+}
+
+task importRequiredDependencies(type: JavaExec) { task ->
+    classpath = sourceSets.main.runtimeClasspath
+    main = 'com.linkedin.python.importer.ImporterCLI'
+
+    def replacements = [
+        'alabaster:0.7=alabaster:0.7.1',                    // candidate for removal
+        'Babel:0.8=Babel:1.0',
+        'chardet:2.2=chardet:2.3.0',                        // candidate for removal
+        'idna:2.0.0=idna:2.0',                              // candidate for removal
+        'pytz:0a=pytz:2016.4',                              // candidate for removal
+        'pytz:2004b.2=pytz:2016.4',
+        'PyYAML:3.02=PyYAML:3.12',
+        'setuptools:0.6a2=setuptools:19.1.1',               // candidate for removal
+        'setuptools:0.6c1=setuptools:19.1.1',
+        'sphinxcontrib-websupport:1.2.0=sphinxcontrib-websupport:1.1.2',
+        'sphinx_rtd_theme:0.1=sphinx_rtd_theme:0.1.1',      // candidate for removal
+        'sphinx_rtd_theme:0.1.0=sphinx_rtd_theme:0.1.1',      // candidate for removal
+    ].join(",")
+    def packagesToInclude = [
+        'flake8:3.6.0',
+        'Flask:0.12.2',
+        'pbr:5.1.1',
+        'pex:1.5.2',
+        'pip:18.1',
+        'pytest:3.10.0',
+        'pytest-cov:2.6.0',
+        'pytest-xdist:1.24.0',
+        'requests:2.20.0',
+        'setuptools:40.5.0',
+        'setuptools-git:1.2',
+        'six:1.11.0',
+        'Sphinx:1.8.1',
+        'virtualenv:16.1.0',
+        'wheel:0.31.1',
+    ].join(" ")
+    def forceDeps = [
+        'setuptools:40.5.0',
+        'wheel:0.31.1',
+        'pip:18.1',
+    ].join(',')
+    args "--repo ${getIvyRepo().absolutePath} $packagesToInclude --replace $replacements --force $forceDeps".split(' ')
+
+    outputs.dir(getIvyRepo())
+    inputs.property('packages', packagesToInclude)
+    setupTestingIvyRepo.dependsOn(task)
+
+    doFirst {
+        file(getIvyRepo()).mkdir()
+    }
+}
+
+license {
+    header rootProject.file('codequality/HEADER')
+    includes(["**/*.java", "**/*.groovy"])
+}
+
+licenseReport {
+    configurations = ['compile', 'testCompile']
+}
+
+publishing.publications.standardjava {
+    artifact shadowJar {
+        classifier "all"
+    }
+
+    artifact distZip {
+        classifier "all"
+    }
+}
+
+assemble.dependsOn shadowJar
+build.dependsOn shadowJar

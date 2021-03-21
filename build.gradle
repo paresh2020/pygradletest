@@ -1,0 +1,76 @@
+apply plugin: 'version'
+apply plugin: 'idea'
+
+allprojects {
+    group = 'com.linkedin.pygradle'
+}
+
+ext {
+    startTime = System.currentTimeMillis()
+}
+
+subprojects {
+    apply plugin: 'idea'
+    apply plugin: 'java'
+
+    buildDir = new File(rootProject.buildDir, path.replace(":", File.separator).substring(0))
+
+    task downloadDependencies {
+        description = 'Download all dependencies to help with CI cacheing'
+        group = 'CI'
+        doLast {
+            //noinspection GroovyAssignabilityCheck
+            configurations.findAll { it.isCanBeResolved() }.each { conf ->
+                conf.files
+            }
+        }
+    }
+
+    tasks.withType(Test) { task ->
+        if (gradle.startParameter.consoleOutput == ConsoleOutput.Plain) {   //on ci we will see tests as they run
+            task.afterTest { TestDescriptor td, TestResult tr ->
+                logger.lifecycle("[${tr.resultType}] - ${td.className}#${td.name}")
+
+            }
+            task.testLogging.exceptionFormat = 'full'
+        }
+        
+        task.minHeapSize = '128m'
+        task.maxHeapSize = '512m'
+        
+        task.afterSuite { desc, result ->
+            if (!desc.parent) { // will match the outermost suite
+                logger.lifecycle("Task {} results: {} ({} tests, {} successes, {} failures, {} skipped)", task.path,
+                    result.resultType, result.testCount, result.successfulTestCount, result.failedTestCount, result.skippedTestCount)
+            }
+        }
+    }
+
+    tasks.matching { it instanceof JavaCompile || it instanceof GroovyCompile }.all {
+        it.options.compilerArgs +=  ['-Xlint:deprecation']
+    }
+
+    idea {
+        module {
+            excludeDirs += buildDir
+        }
+    }
+
+    sourceCompatibility = JavaVersion.VERSION_1_8
+    targetCompatibility = JavaVersion.VERSION_1_8
+
+    /* temporarily disable to fit in CI memory limit
+    afterEvaluate {
+        project.tasks.withType(FindBugs)
+            .matching { it.name != 'findbugsMain' }
+            .each { it.enabled = false }
+    }
+    */
+}
+
+idea {
+    project {
+        jdkName = '1.8'
+        languageLevel = '1.8'
+    }
+}

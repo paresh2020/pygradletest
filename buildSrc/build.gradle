@@ -1,0 +1,22 @@
+plugins {
+    id "java-gradle-plugin"
+    id 'idea'
+}
+
+repositories {
+    mavenLocal()
+    jcenter()
+}
+
+dependencies {
+    compile gradleApi()
+}
+
+gradlePlugin {
+    plugins {
+        versionPlugin {
+            id = "version"
+            implementationClass = "com.linkedin.gradle.build.version.VersionPlugin"
+        }
+    }
+}
